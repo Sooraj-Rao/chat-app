@@ -3,25 +3,88 @@
 @tailwind utilities;
 
 :root {
+  --primary: #00a884;
+  --secondary: #f0f2f5;
+  --text-primary: #111b21;
+  --text-secondary: #667781;
   --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --sidebar-background: #f0f2f5;
+  --hover: #f5f6f6;
+  --border: #e9edef;
 }
 
 body {
-  color: var(--foreground);
+  color: var(--text-primary);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.chat-bubble-user {
+  background-color: #d9fdd3;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  max-width: 65%;
+  position: relative;
+}
+
+.chat-bubble-user::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-left: 10px solid #d9fdd3;
+  border-top: 10px solid transparent;
+}
+
+.chat-bubble-other {
+  background-color: white;
+  border-radius: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  max-width: 65%;
+  position: relative;
+}
+
+.chat-bubble-other::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -8px;
+  width: 0;
+  height: 0;
+  border-right: 10px solid white;
+  border-top: 10px solid transparent;
+}
+
+.badge {
+  @apply text-xs px-2 py-0.5 rounded-md;
+}
+
+.badge-demo {
+  @apply bg-orange-100 text-orange-800;
+}
+
+.badge-internal {
+  @apply bg-green-100 text-green-800;
+}
+
+.badge-signup {
+  @apply bg-blue-100 text-blue-800;
+}
+
+.badge-content {
+  @apply bg-purple-100 text-purple-800;
+}
+
+.badge-dont-send {
+  @apply bg-red-100 text-red-800;
 }
