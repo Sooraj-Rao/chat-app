@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import type { User } from "@/types/chats";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -8,14 +9,6 @@ import { useAuth } from "@/components/providers/auth-provider";
 import { FiX, FiSearch, FiUser, FiUsers } from "react-icons/fi";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-
-type Contact = {
-  id: string;
-  fullname: string;
-  username: string;
-  image: string | null;
-  phone: string | null;
-};
 
 type ContactSelectionModalProps = {
   isOpen: boolean;
@@ -26,7 +19,7 @@ export default function ContactSelectionModal({
   isOpen,
   onClose,
 }: ContactSelectionModalProps) {
-  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [contacts, setContacts] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
@@ -44,7 +37,7 @@ export default function ContactSelectionModal({
     try {
       const { data, error } = await supabase
         .from("users")
-        .select("id, fullname, username, image")
+        .select("id, fullname, username, gender, image, phone")
         .neq("id", user.id);
 
       if (error) {
@@ -63,7 +56,6 @@ export default function ContactSelectionModal({
   useEffect(() => {
     if (isOpen) {
       fetchContacts();
-      // Reset state when modal opens
       setSelectedContacts([]);
       setGroupName("");
       setShowGroupNameInput(false);
@@ -104,7 +96,6 @@ export default function ContactSelectionModal({
       const isGroup = selectedContacts.length > 1 || showGroupNameInput;
 
       if (isGroup) {
-        // Create a new group chat
         const title =
           groupName || `Group with ${selectedContacts.length} people`;
 
@@ -124,7 +115,6 @@ export default function ContactSelectionModal({
           return;
         }
 
-        // Add default "Demo" label to the conversation
         await supabase.from("conversation_labels").insert({
           conversation_id: conversationData.id,
           label_id: "1", // Demo label
@@ -133,7 +123,6 @@ export default function ContactSelectionModal({
         onClose();
         router.push(`/chats?selected=${conversationData.id}`);
       } else {
-        // Check if a direct conversation already exists with this contact
         const { data: existingConversation, error: checkError } = await supabase
           .from("conversations")
           .select("id")
@@ -142,20 +131,17 @@ export default function ContactSelectionModal({
           .single();
 
         if (!checkError && existingConversation) {
-          // Conversation already exists, navigate to it
           onClose();
           router.push(`/chats?selected=${existingConversation.id}`);
           return;
         }
 
-        // Get contact's name for the conversation title
         const { data: contactData } = await supabase
           .from("users")
           .select("fullname")
           .eq("id", selectedContacts[0])
           .single();
 
-        // Create a new direct conversation
         const { data: conversationData, error: createError } = await supabase
           .from("conversations")
           .insert({
@@ -172,7 +158,6 @@ export default function ContactSelectionModal({
           return;
         }
 
-        // Add default "Demo" label to the conversation
         await supabase.from("conversation_labels").insert({
           conversation_id: conversationData.id,
           label_id: "1", // Demo label

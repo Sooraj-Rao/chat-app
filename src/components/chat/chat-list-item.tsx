@@ -2,33 +2,19 @@
 
 import { useState, useRef, useEffect } from "react";
 import type React from "react";
+import type { Conversation, Label } from "@/types/chats";
 
 import Image from "next/image";
 import { FiMoreVertical, FiTag } from "react-icons/fi";
 
-type Label = {
-  id: string;
-  name: string;
-  color: string;
-};
-
-type Conversation = {
-  id: string;
-  title: string;
-  is_group: boolean;
-  participants: string[];
-  last_message: string | null;
-  last_message_at: string | null;
-  creator_id: string | null;
-  labels: Label[];
-  unread_count: number;
-  participants_info: {
-    id: string;
-    fullname: string;
-    username: string;
-    image: string | null;
-    phone: string | null;
-  }[];
+type ChatListItemProps = {
+  conversation: Conversation;
+  isSelected: boolean;
+  onClick: () => void;
+  onAddLabel: (labelId: string) => void;
+  onRemoveLabel: (labelId: string) => void;
+  availableLabels: Label[];
+  formatDate: (dateString: string | null) => string;
 };
 
 export default function ChatListItem({
@@ -39,15 +25,7 @@ export default function ChatListItem({
   onRemoveLabel,
   availableLabels,
   formatDate,
-}: {
-  conversation: Conversation;
-  isSelected: boolean;
-  onClick: () => void;
-  onAddLabel: (labelId: string) => void;
-  onRemoveLabel: (labelId: string) => void;
-  availableLabels: Label[];
-  formatDate: (dateString: string | null) => string;
-}) {
+}: ChatListItemProps) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -90,8 +68,8 @@ export default function ChatListItem({
     setShowMenu(false);
   };
 
-  const chatLabelIds = conversation.labels.map((label) => label.id);
-  const primaryParticipant = conversation.participants_info[0] || null;
+  const chatLabelIds = conversation.labels?.map((label) => label.id) || [];
+  const primaryParticipant = conversation.participants_info?.[0] || null;
   const phone = primaryParticipant?.phone || null;
 
   return (
@@ -144,12 +122,12 @@ export default function ChatListItem({
           </div>
 
           <div className="flex items-center mt-1 flex-wrap">
-            {conversation.labels.map((label) => (
+            {conversation.labels?.map((label) => (
               <span
                 key={label.id}
                 className={`badge badge-${label.name.toLowerCase()} mr-1 mb-1 flex items-center`}
                 style={{
-                  backgroundColor: `${label.color}20`, // 20% opacity
+                  backgroundColor: `${label.color}20`,
                   color: label.color,
                 }}
               >
@@ -169,7 +147,7 @@ export default function ChatListItem({
           )}
         </div>
 
-        {conversation.unread_count > 0 && (
+        {(conversation.unread_count ?? 0) > 0 && (
           <div className="flex-shrink-0">
             <span className="inline-flex items-center justify-center w-5 h-5 bg-green-500 text-white text-xs rounded-full">
               {conversation.unread_count}

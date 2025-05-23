@@ -1,6 +1,7 @@
 "use client";
 
 import type React from "react";
+import type { Message } from "@/types/chats";
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
@@ -15,19 +16,8 @@ import {
 } from "react-icons/fi";
 import Image from "next/image";
 import ChatMessage from "./chat-message";
-import { formatMessageDate, groupMessagesByDate } from "@/utils/date-util";
-
-type Message = {
-  id: string;
-  message: string;
-  created_at: string;
-  sender_id: string;
-  read_by: string[];
-  sender: {
-    fullname: string;
-    image: string | null;
-  };
-};
+import { groupMessagesByDate } from "@/utils/date-util";
+import { dataSyncService } from "@/lib/data-sync";
 
 type ConversationDetails = {
   id: string;
@@ -54,6 +44,7 @@ export default function ChatWindow({
   const [conversationDetails, setConversationDetails] =
     useState<ConversationDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const sentMessageIds = useRef<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const supabase = useMemo(() => createSupabaseClient(), []);
@@ -85,7 +76,7 @@ export default function ChatWindow({
 
       const { data: usersData, error: usersError } = await supabase
         .from("users")
-        .select("id, fullname, username, image")
+        .select("id, fullname, username, image, phone")
         .in("id", conversationData.participants);
 
       if (usersError) {
@@ -111,10 +102,20 @@ export default function ChatWindow({
     console.log("Fetching messages for conversation:", conversationId);
 
     try {
-      // Get all messages for this conversation
+      sentMessageIds.current.clear();
+
+      const localMessages = await dataSyncService.getLocalMessages(
+        conversationId
+      );
+
+      if (localMessages.length > 0) {
+        setMessages(localMessages);
+        setIsLoading(false);
+      }
+
       const { data: messagesData, error: messagesError } = await supabase
         .from("messages")
-        .select("id, message, created_at, sender_id, read_by")
+        .select("id, message, created_at, sender_id, read_by, conversation_id")
         .eq("conversation_id", conversationId)
         .order("created_at", { ascending: true });
 
@@ -131,12 +132,10 @@ export default function ChatWindow({
         return;
       }
 
-      // Get all unique sender IDs from messages
       const senderIds = [
-        ...new Set(messagesData.map((message) => message.sender_id)),
+        ...Array.from(new Set(messagesData.map((message) => message.sender_id))),
       ];
 
-      // Get user details for all senders
       const { data: usersData, error: usersError } = await supabase
         .from("users")
         .select("id, fullname, image")
@@ -149,7 +148,6 @@ export default function ChatWindow({
 
       console.log("Users data for messages:", usersData);
 
-      // Create a map of user details for quick lookup
       const userMap = usersData.reduce((acc, user) => {
         acc[user.id] = {
           fullname: user.fullname,
@@ -158,22 +156,20 @@ export default function ChatWindow({
         return acc;
       }, {} as Record<string, { fullname: string; image: string | null }>);
 
-      // Combine message data with sender details
       const formattedMessages = messagesData.map((message) => ({
-        id: message.id,
-        message: message.message,
-        created_at: message.created_at,
-        sender_id: message.sender_id,
-        read_by: message.read_by || [],
+        ...message,
         sender: userMap[message.sender_id] || {
           fullname: "Unknown User",
           image: null,
         },
       }));
 
+      for (const message of formattedMessages) {
+        await dataSyncService.saveMessageLocally(message);
+      }
+
       setMessages(formattedMessages);
 
-      // Mark messages as read
       const unreadMessages = messagesData
         .filter((msg) => !msg.read_by?.includes(user.id))
         .map((msg) => msg.id);
@@ -211,7 +207,6 @@ export default function ChatWindow({
   useEffect(() => {
     if (!conversationId || !user) return;
 
-    // Subscribe to new messages for this specific conversation
     const subscription = supabase
       .channel(`conversation-messages-${conversationId}`)
       .on(
@@ -225,7 +220,14 @@ export default function ChatWindow({
         async (payload) => {
           console.log("New message received:", payload);
 
-          // Fetch the sender details
+          if (
+            payload.new.sender_id === user.id &&
+            sentMessageIds.current.has(payload.new.id)
+          ) {
+            console.log("Ignoring already displayed message:", payload.new.id);
+            return;
+          }
+
           const { data: userData, error: userError } = await supabase
             .from("users")
             .select("fullname, image")
@@ -239,6 +241,7 @@ export default function ChatWindow({
 
           const newMsg: Message = {
             id: payload.new.id,
+            conversation_id: payload.new.conversation_id,
             message: payload.new.message,
             created_at: payload.new.created_at,
             sender_id: payload.new.sender_id,
@@ -249,9 +252,16 @@ export default function ChatWindow({
             },
           };
 
-          setMessages((prev) => [...prev, newMsg]);
+          setMessages((prev) => {
+            const messageExists = prev.some((msg) => msg.id === newMsg.id);
+            if (messageExists) {
+              return prev;
+            }
+            return [...prev, newMsg];
+          });
 
-          // Mark message as read if it's not from the current user
+          dataSyncService.saveMessageLocally(newMsg);
+
           if (payload.new.sender_id !== user.id) {
             await supabase
               .from("messages")
@@ -283,30 +293,54 @@ export default function ChatWindow({
 
       try {
         const messageId = crypto.randomUUID();
+        const now = new Date().toISOString();
 
-        const { error } = await supabase.from("messages").insert({
+        const newMsg: Message = {
           id: messageId,
           conversation_id: conversationId,
           sender_id: user.id,
           message: newMessage,
-          read_by: [user.id], // Mark as read by sender
+          created_at: now,
+          read_by: [user.id],
+        };
+
+        sentMessageIds.current.add(messageId);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            ...newMsg,
+            sender: {
+              fullname: user.fullname,
+              image: user.image,
+            },
+          },
+        ]);
+
+        await dataSyncService.saveMessageLocally({
+          ...newMsg,
+          sender: {
+            fullname: user.fullname,
+            image: user.image,
+          },
         });
+
+        setNewMessage("");
+
+        const { error } = await supabase.from("messages").insert(newMsg);
 
         if (error) {
           console.error("Error sending message:", error);
           return;
         }
 
-        // Update the last message in the conversation
         await supabase
           .from("conversations")
           .update({
             last_message: newMessage,
-            last_message_at: new Date().toISOString(),
+            last_message_at: now,
           })
           .eq("id", conversationId);
-
-        setNewMessage("");
       } catch (error) {
         console.error("Error in handleSendMessage:", error);
       }
@@ -321,9 +355,13 @@ export default function ChatWindow({
     []
   );
 
-  // Group messages by date
   const groupedMessages = useMemo(() => {
-    return groupMessagesByDate(messages);
+    try {
+      return groupMessagesByDate(messages);
+    } catch (error) {
+      console.error("Error grouping messages by date:", error);
+      return {};
+    }
   }, [messages]);
 
   if (!conversationId) {
@@ -338,7 +376,6 @@ export default function ChatWindow({
 
   return (
     <div className="flex-1 flex flex-col h-full">
-      {/* Chat header */}
       <header className="px-4 py-3 border-b border-gray-200 flex items-center justify-between bg-white">
         <div className="flex items-center space-x-3">
           {conversationDetails?.is_group ? (
@@ -427,10 +464,9 @@ export default function ChatWindow({
         </div>
       </header>
 
-      {/* Messages area */}
       <div
-        className="flex-1 overflow-y-auto p-4 bg-gray-50"
-        style={{ backgroundImage: "url('/whatsapp-bg.png')" }}
+        className="flex-1 overflow-y-auto p-4 bg-gray-50 max-h-[33rem]"
+        style={{ backgroundImage: "url('/bg.png')" }}
       >
         {isLoading ? (
           <div className="flex justify-center items-center h-full">
@@ -443,7 +479,9 @@ export default function ChatWindow({
                 <div key={date}>
                   <div className="flex justify-center my-4">
                     <div className="bg-white px-3 py-1 rounded-lg shadow-sm text-xs text-gray-500">
-                      {formatMessageDate(date)}
+                      {date === "Invalid Date" || date === "Unknown Date"
+                        ? "Unknown Date"
+                        : date}
                     </div>
                   </div>
                   {dateMessages.map((message) => (
@@ -466,7 +504,6 @@ export default function ChatWindow({
         )}
       </div>
 
-      {/* Message input */}
       <div className="border-t border-gray-200 bg-white p-3">
         <form
           onSubmit={handleSendMessage}

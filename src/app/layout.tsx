@@ -1,16 +1,9 @@
 import type React from "react";
-import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/providers/auth-provider";
 
 const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Chat Application",
-  description:
-    "A real-time chat application built with Next.js, Tailwind CSS, and Supabase",
-};
 
 export default function RootLayout({
   children,

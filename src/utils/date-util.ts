@@ -1,9 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { format, isToday, isYesterday, isSameYear } from "date-fns";
 
 export function formatMessageDate(dateString: string): string {
   const date = new Date(dateString);
 
-  // Check if date is invalid
   if (isNaN(date.getTime())) return "";
 
   if (isToday(date)) {
@@ -26,7 +26,7 @@ export function formatChatListDate(dateString: string | null): string {
   if (!dateString) return "";
 
   const date = new Date(dateString);
-  if (isNaN(date.getTime())) return ""; // invalid date check
+  if (isNaN(date.getTime())) return "";
 
   const now = new Date();
 
@@ -40,7 +40,6 @@ export function formatChatListDate(dateString: string | null): string {
     return format(date, "dd-MM-yy");
   }
 }
-
 
 export function groupMessagesByDate(messages: any[]): { [key: string]: any[] } {
   const grouped: { [key: string]: any[] } = {};

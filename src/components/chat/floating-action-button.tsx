@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { FiPlus } from "react-icons/fi";
-import ContactSelectionModal from "./contact-selection";
+import ContactSelectionModal from "./contact-selection-modal";
 
 export default function FloatingActionButton() {
   const [isModalOpen, setIsModalOpen] = useState(false);

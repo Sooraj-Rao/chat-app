@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/providers/auth-provider";
 import Sidebar from "@/components/sidebar/sidebar";
 import ChatList from "@/components/chat/chat-list";
@@ -14,6 +14,7 @@ import {
   FiSettings,
 } from "react-icons/fi";
 import AuthModal from "@/components/auth/auth-modal";
+import { dbManager } from "@/lib/indexdb";
 
 export default function ChatsPage() {
   const [selectedConversationId, setSelectedConversationId] = useState<
@@ -21,7 +22,6 @@ export default function ChatsPage() {
   >(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { user, isLoading } = useAuth();
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -31,7 +31,6 @@ export default function ChatsPage() {
   }, [user, isLoading]);
 
   useEffect(() => {
-    // Check if there's a selected conversation in the URL
     const selected = searchParams.get("selected");
     if (selected) {
       setSelectedConversationId(selected);
@@ -44,6 +43,9 @@ export default function ChatsPage() {
 
   const handleRefresh = useCallback(async () => {
     try {
+      await dbManager.clear("messages");
+      await dbManager.clear("conversations");
+
       const response = await fetch("/api/seed");
       const data = await response.json();
 

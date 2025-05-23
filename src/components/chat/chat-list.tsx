@@ -1,10 +1,12 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import type React from "react";
+import type { Conversation, Label } from "@/types/chats";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   FiSearch,
   FiFilter,
@@ -14,34 +16,10 @@ import {
   FiX,
 } from "react-icons/fi";
 import { useAuth } from "@/components/providers/auth-provider";
+import ContactSelectionModal from "./contact-selection-modal";
 import ChatListItem from "./chat-list-item";
+import { dataSyncService } from "@/lib/data-sync";
 import { formatChatListDate } from "@/utils/date-util";
-import ContactSelectionModal from "./contact-selection";
-
-type Label = {
-  id: string;
-  name: string;
-  color: string;
-};
-
-type Conversation = {
-  id: string;
-  title: string;
-  is_group: boolean;
-  participants: string[];
-  last_message: string | null;
-  last_message_at: string | null;
-  creator_id: string | null;
-  labels: Label[];
-  unread_count: number;
-  participants_info: {
-    id: string;
-    fullname: string;
-    username: string;
-    image: string | null;
-    phone: string | null;
-  }[];
-};
 
 export default function ChatList({
   selectedConversationId,
@@ -57,12 +35,10 @@ export default function ChatList({
   const [isLoading, setIsLoading] = useState(true);
   const [labels, setLabels] = useState<Label[]>([]);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const supabase = useMemo(() => createSupabaseClient(), []);
 
-  // Check if there's a selected conversation in the URL
   useEffect(() => {
     const selected = searchParams.get("selected");
     if (selected && selected !== selectedConversationId) {
@@ -92,7 +68,13 @@ export default function ChatList({
     console.log("Fetching conversations for user:", user.id);
 
     try {
-      // Get all conversations where the current user is a participant
+      const localConversations = await dataSyncService.getLocalConversations();
+
+      if (localConversations.length > 0) {
+        setConversations(localConversations);
+        setIsLoading(false);
+      }
+
       const { data: conversationsData, error: conversationsError } =
         await supabase
           .from("conversations")
@@ -105,18 +87,15 @@ export default function ChatList({
         return;
       }
 
-      console.log("Conversations data:", conversationsData);
-
       if (!conversationsData || conversationsData.length === 0) {
         setConversations([]);
         setIsLoading(false);
         return;
       }
 
-      // Get all participants' info
       const allParticipantIds = new Set<string>();
       conversationsData.forEach((conv) => {
-        conv.participants.forEach((id) => {
+        conv.participants.forEach((id: string) => {
           if (id !== user.id) {
             allParticipantIds.add(id);
           }
@@ -125,7 +104,7 @@ export default function ChatList({
 
       const { data: usersData, error: usersError } = await supabase
         .from("users")
-        .select("id, fullname, username, image")
+        .select("id, fullname, username, image, phone")
         .in("id", Array.from(allParticipantIds));
 
       if (usersError) {
@@ -133,13 +112,11 @@ export default function ChatList({
         return;
       }
 
-      // Create a map of user data for quick lookup
       const userMap = new Map();
       usersData.forEach((userData) => {
         userMap.set(userData.id, userData);
       });
 
-      // Get labels for all conversations
       const { data: labelData, error: labelError } = await supabase
         .from("conversation_labels")
         .select(
@@ -158,16 +135,14 @@ export default function ChatList({
         return;
       }
 
-      // Create a map of conversation labels
       const labelMap = new Map<string, Label[]>();
       labelData.forEach((item) => {
         if (!labelMap.has(item.conversation_id)) {
           labelMap.set(item.conversation_id, []);
         }
-        labelMap.get(item.conversation_id)?.push(item.label);
+        labelMap.get(item.conversation_id)?.push(item.label as unknown as Label);
       });
 
-      // Get unread message counts
       const unreadCounts = new Map<string, number>();
       for (const conv of conversationsData) {
         const { count, error: countError } = await supabase
@@ -184,12 +159,11 @@ export default function ChatList({
         }
       }
 
-      // Process conversations with user info and labels
       const processedConversations = conversationsData.map((conv) => {
         const participantsInfo = conv.participants
-          .filter((id) => id !== user.id)
+          .filter((id: string) => id !== user.id)
           .map(
-            (id) =>
+            (id: string) =>
               userMap.get(id) || {
                 id,
                 fullname: "Unknown",
@@ -199,19 +173,22 @@ export default function ChatList({
               }
           );
 
-        // For direct messages, use the other person's name as the title if no title is set
         let title = conv.title;
         if (!conv.is_group && participantsInfo.length > 0) {
           title = participantsInfo[0].fullname;
         }
 
-        return {
+        const processedConv = {
           ...conv,
           title,
           labels: labelMap.get(conv.id) || [],
           unread_count: unreadCounts.get(conv.id) || 0,
           participants_info: participantsInfo,
         };
+
+        dataSyncService.saveConversationLocally(processedConv);
+
+        return processedConv;
       });
 
       setConversations(processedConversations);
@@ -232,7 +209,6 @@ export default function ChatList({
   useEffect(() => {
     if (!user) return;
 
-    // Subscribe to changes in conversations table
     const conversationsSubscription = supabase
       .channel("conversations-changes")
       .on(
@@ -250,7 +226,6 @@ export default function ChatList({
       )
       .subscribe();
 
-    // Subscribe to changes in messages table that might affect conversations
     const messagesSubscription = supabase
       .channel("messages-changes")
       .on(
@@ -267,7 +242,6 @@ export default function ChatList({
       )
       .subscribe();
 
-    // Subscribe to changes in conversation labels
     const labelsSubscription = supabase
       .channel("conversation-labels-changes")
       .on(
@@ -292,26 +266,26 @@ export default function ChatList({
   }, [supabase, user, fetchConversations]);
 
   const filteredConversations = useMemo(() => {
-    return conversations.filter((conversation) => {
-      // Filter by search query
+    return conversations?.filter((conversation) => {
       const matchesSearch =
-        conversation.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (conversation.last_message &&
+        conversation?.title
+          ?.toLowerCase()
+          .includes(searchQuery.toLowerCase()) ||
+        (conversation?.last_message &&
           conversation.last_message
             .toLowerCase()
             .includes(searchQuery.toLowerCase())) ||
-        conversation.participants_info.some(
+        conversation.participants_info?.some(
           (p) =>
-            p.fullname.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            p.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p?.fullname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            p?.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
             (p.phone && p.phone.includes(searchQuery))
         );
 
-      // Filter by label
       if (selectedFilter) {
         return (
           matchesSearch &&
-          conversation.labels.some((label) => label.id === selectedFilter)
+          conversation.labels?.some((label) => label.id === selectedFilter)
         );
       }
 
@@ -333,7 +307,6 @@ export default function ChatList({
   const handleSelectConversation = useCallback(
     (conversationId: string) => {
       onSelectConversation(conversationId);
-      // Update URL without full navigation
       const url = new URL(window.location.href);
       url.searchParams.set("selected", conversationId);
       window.history.pushState({}, "", url);
@@ -351,7 +324,6 @@ export default function ChatList({
       if (!user) return;
 
       try {
-        // Check if the label is already applied
         const { data, error: checkError } = await supabase
           .from("conversation_labels")
           .select("id")
@@ -360,15 +332,12 @@ export default function ChatList({
           .single();
 
         if (checkError && checkError.code !== "PGRST116") {
-          // PGRST116 is "no rows returned" which is expected if the label isn't applied
           console.error("Error checking label:", checkError);
           return;
         }
 
-        // If the label is already applied, do nothing
         if (data) return;
 
-        // Add the label
         const { error } = await supabase.from("conversation_labels").insert({
           conversation_id: conversationId,
           label_id: labelId,
@@ -379,7 +348,6 @@ export default function ChatList({
           return;
         }
 
-        // Refresh conversations
         fetchConversations();
       } catch (error) {
         console.error("Error in addLabelToConversation:", error);
@@ -404,7 +372,6 @@ export default function ChatList({
           return;
         }
 
-        // Refresh conversations
         fetchConversations();
       } catch (error) {
         console.error("Error in removeLabelFromConversation:", error);
@@ -541,7 +508,6 @@ export default function ChatList({
         )}
       </div>
 
-      {/* Floating action button for new chat */}
       <button
         onClick={openContactModal}
         className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
