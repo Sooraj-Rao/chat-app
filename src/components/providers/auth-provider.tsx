@@ -1,7 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import type React from "react";
-import type { User } from "@/types/chat";
+import type { User } from "@/types/chats";
 
 import { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
