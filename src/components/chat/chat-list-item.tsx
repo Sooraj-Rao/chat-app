@@ -6,6 +6,7 @@ import type { Conversation, Label } from "@/types/chats";
 
 import Image from "next/image";
 import { FiMoreVertical, FiTag } from "react-icons/fi";
+import { CgProfile } from "react-icons/cg";
 
 type ChatListItemProps = {
   conversation: Conversation;
@@ -74,7 +75,7 @@ export default function ChatListItem({
 
   return (
     <div
-      className={`p-3 border-b border-gray-200 cursor-pointer relative ${
+      className={`p-3 border-b border-gray-100 cursor-pointer relative ${
         isSelected ? "bg-gray-100" : "hover:bg-gray-50"
       }`}
       onClick={onClick}
@@ -97,20 +98,44 @@ export default function ChatListItem({
             />
           ) : (
             <div className="w-10 h-10 bg-gray-300 rounded-full flex items-center justify-center text-white">
-              {getInitials(conversation.title)}
+              {/* {getInitials(conversation.title)} */}
+              <CgProfile size={20}/>
             </div>
           )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-gray-900 truncate">
-              {conversation.title}
-            </h3>
-            <div className="flex items-center">
-              <span className="text-xs text-gray-500 mr-2">
-                {formatDate(conversation.last_message_at)}
-              </span>
+            <div className=" flex justify-between w-full items-center">
+              <h3 className="text-sm font-bold text-gray-900 truncate">
+                {conversation.title}
+              </h3>
+              {conversation.labels?.map((label) => (
+                <p
+                  key={label.id}
+                  className={`badge badge-${label.name.toLowerCase()}  flex items-center`}
+                  style={{
+                    backgroundColor: `${label.color}20`,
+                    color: label.color,
+                  }}
+                >
+                  {label.name}
+                </p>
+              ))}
+            </div>
+          </div>
+          <div className=" flex justify-between items-center">
+            <p className="text-sm text-gray-500 truncate">
+              {conversation.last_message || "No messages yet"}
+            </p>
+            <div className=" flex items-center gap-x-2">
+              {(conversation.unread_count ?? 0) > 0 && (
+                <div className="flex-shrink-0">
+                  <span className="inline-flex items-center justify-center w-4 h-4 bg-green-500 text-white text-xs rounded-full">
+                    {conversation.unread_count}
+                  </span>
+                </div>
+              )}
               <button
                 onClick={handleMenuClick}
                 className="text-gray-400 hover:text-gray-600"
@@ -120,40 +145,19 @@ export default function ChatListItem({
               </button>
             </div>
           </div>
-
-          <div className="flex items-center mt-1 flex-wrap">
-            {conversation.labels?.map((label) => (
-              <span
-                key={label.id}
-                className={`badge badge-${label.name.toLowerCase()} mr-1 mb-1 flex items-center`}
-                style={{
-                  backgroundColor: `${label.color}20`,
-                  color: label.color,
-                }}
-              >
-                {label.name}
+          <div className=" flex justify-between items-center">
+            {phone && (
+              <div className="flex items-center bg-gray-100 rounded-xl py-[2px] px-1 mt-1 text-[10px] text-gray-500">
+                <span>+91 {phone}</span>
+              </div>
+            )}
+            <div className="flex items-center">
+              <span className="text-xs text-gray-500 mr-2">
+                {formatDate(conversation.last_message_at)}
               </span>
-            ))}
-          </div>
-
-          <p className="text-sm text-gray-500 truncate mt-1">
-            {conversation.last_message || "No messages yet"}
-          </p>
-
-          {phone && (
-            <div className="flex items-center mt-1 text-xs text-gray-500">
-              <span>{phone}</span>
             </div>
-          )}
-        </div>
-
-        {(conversation.unread_count ?? 0) > 0 && (
-          <div className="flex-shrink-0">
-            <span className="inline-flex items-center justify-center w-5 h-5 bg-green-500 text-white text-xs rounded-full">
-              {conversation.unread_count}
-            </span>
           </div>
-        )}
+        </div>
       </div>
 
       {showMenu && (

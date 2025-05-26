@@ -28,16 +28,12 @@ export function formatChatListDate(dateString: string | null): string {
   const date = new Date(dateString);
   if (isNaN(date.getTime())) return "";
 
-  const now = new Date();
-
   if (isToday(date)) {
     return format(date, "HH:mm");
   } else if (isYesterday(date)) {
     return "Yesterday";
-  } else if (isSameYear(date, now)) {
-    return format(date, "dd-MM");
   } else {
-    return format(date, "dd-MM-yy");
+    return format(date, "dd-LLL-yy");
   }
 }
 

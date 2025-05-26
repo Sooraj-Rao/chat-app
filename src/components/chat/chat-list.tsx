@@ -7,19 +7,16 @@ import type { Conversation, Label } from "@/types/chats";
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createSupabaseClient } from "@/lib/supabase/client";
 import { useSearchParams } from "next/navigation";
-import {
-  FiSearch,
-  FiFilter,
-  FiPlus,
-  FiSave,
-  FiMessageCircle,
-  FiX,
-} from "react-icons/fi";
+import { FiSearch, FiX } from "react-icons/fi";
 import { useAuth } from "@/components/providers/auth-provider";
 import ContactSelectionModal from "./contact-selection-modal";
 import ChatListItem from "./chat-list-item";
 import { dataSyncService } from "@/lib/data-sync";
 import { formatChatListDate } from "@/utils/date-util";
+import { AiFillMessage } from "react-icons/ai";
+import { RiFolderDownloadFill } from "react-icons/ri";
+import { IoFilterOutline, IoSearchSharp } from "react-icons/io5";
+import { TbMessageCirclePlus } from "react-icons/tb";
 
 export default function ChatList({
   selectedConversationId,
@@ -37,6 +34,7 @@ export default function ChatList({
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const [isSearch, setisSearch] = useState(false);
   const supabase = useMemo(() => createSupabaseClient(), []);
 
   useEffect(() => {
@@ -140,7 +138,9 @@ export default function ChatList({
         if (!labelMap.has(item.conversation_id)) {
           labelMap.set(item.conversation_id, []);
         }
-        labelMap.get(item.conversation_id)?.push(item.label as unknown as Label);
+        labelMap
+          .get(item.conversation_id)
+          ?.push(item.label as unknown as Label);
       });
 
       const unreadCounts = new Map<string, number>();
@@ -385,69 +385,76 @@ export default function ChatList({
   }, []);
 
   return (
-    <div className="w-80 border-r border-gray-200 h-full flex flex-col bg-white relative">
+    <div className="w-96 border-r border-gray-200 h-full flex flex-col bg-white relative">
       <div className="p-3 border-b border-gray-200">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
             <span className="text-gray-500">
-              <FiMessageCircle size={18} />
+              <AiFillMessage size={18} />
             </span>
             <span className="text-gray-600 font-medium">chats</span>
           </div>
-          <button
-            onClick={openContactModal}
-            className="text-gray-500 hover:text-gray-700"
-          >
-            <FiPlus size={18} />
-          </button>
         </div>
 
-        <div className="flex items-center space-x-2 mb-3">
-          <button
-            className="flex items-center space-x-2 bg-green-100 text-green-800 px-3 py-1.5 rounded-md text-sm"
-            onClick={toggleFilter}
-          >
-            <FiFilter size={14} />
-            <span>Custom filter</span>
-          </button>
-          <button className="text-gray-500 hover:text-gray-700">
-            <FiSave size={18} />
-          </button>
+        <div className="flex items-center justify-between">
+          <div className=" flex items-center">
+            <button
+              className="flex items-center space-x-2  font-bold text-green-500 px-3 py-1.5 rounded-md text-sm"
+              onClick={toggleFilter}
+            >
+              <RiFolderDownloadFill size={18} />
+              <span>Custom filter</span>
+            </button>
+            <button className="text-gray-500 text-xs font-semibold border-gray-200 border-2 py-1 px-2 rounded-[5px] hover:text-gray-700">
+              Save
+            </button>
+          </div>
+          <div className="flex items-center gap-x-1">
+            <button
+              onClick={() => setisSearch(!isSearch)}
+              className="text-gray-500 gap-x-1  flex items-center text-xs font-semibold border-gray-200 border-2 py-1 px-2 rounded-[5px] hover:text-gray-700"
+            >
+              <IoSearchSharp size={13} />
+              Search
+            </button>
+            <div className=" relative">
+              <button
+                className={`text-gray-500 relative flex items-center gap-x-1 text-xs font-semibold border-gray-200 border-2 py-1 px-2 rounded-[5px] hover:text-gray-700
+                ${selectedFilter ? " text-green-600" : ""}
+                `}
+                onClick={toggleFilter}
+              >
+                <IoFilterOutline size={13} />
+                Filterd
+              </button>
+              {selectedFilter && (
+                <button
+                  onClick={() => handleFilterSelect(null)}
+                  className=" absolute -top-2 -right-2 bg-green-600 text-white rounded-full p-1 flex items-center justify-center"
+                >
+                  <FiX size={12} />
+                </button>
+              )}
+            </div>
+          </div>
         </div>
-
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search"
-            className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
-            value={searchQuery}
-            onChange={handleSearchChange}
-          />
-          <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-        </div>
+        {isSearch && (
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search"
+              className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-green-500"
+              value={searchQuery}
+              onChange={handleSearchChange}
+            />
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+          </div>
+        )}
 
         <div className="flex items-center mt-3">
-          <button
-            className={`flex items-center space-x-1 px-2 py-1 rounded-md ${
-              isFilterOpen ? "bg-gray-100" : ""
-            }`}
-            onClick={toggleFilter}
-          >
-            <FiFilter size={14} className="text-gray-500" />
-            <span className="text-sm text-gray-600">Filtered</span>
-            {selectedFilter && (
-              <span className="flex items-center justify-center w-5 h-5 bg-green-500 text-white text-xs rounded-full">
-                1
-              </span>
-            )}
-          </button>
-
           {selectedFilter && (
-            <button
-              onClick={() => handleFilterSelect(null)}
-              className="ml-2 text-xs text-gray-500 hover:text-gray-700 flex items-center"
-            >
-              Clear <FiX size={12} className="ml-1" />
+            <button className="ml-2 text-xs text-gray-500 hover:text-gray-700 flex items-center">
+              Clear
             </button>
           )}
         </div>
@@ -513,7 +520,7 @@ export default function ChatList({
         className="absolute bottom-4 right-4 w-12 h-12 rounded-full bg-green-500 text-white flex items-center justify-center shadow-lg hover:bg-green-600 transition-colors"
         aria-label="New chat"
       >
-        <FiPlus size={24} />
+        <TbMessageCirclePlus size={24} />
       </button>
 
       <ContactSelectionModal
